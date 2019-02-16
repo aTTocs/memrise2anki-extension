@@ -1,6 +1,7 @@
-import urllib2, cookielib, urllib, httplib, urlparse, re, time, os.path, json, collections, datetime, calendar, functools
-import BeautifulSoup
-import uuid, markdown
+import urllib.request, http.cookiejar, urllib.request, urllib.parse, urllib.error, http.client, urllib.parse, re, time, os.path, json, collections, datetime, calendar, functools
+from bs4 import BeautifulSoup
+import uuid
+from . import markdown
 
 def utcToLocal(utcDt):
     # get integer timestamp to avoid precision lost
@@ -9,10 +10,10 @@ def utcToLocal(utcDt):
     assert utcDt.resolution >= datetime.timedelta(microseconds=1)
     return localDt.replace(microsecond=utcDt.microsecond)
 
-def sanitizeName(name, default=u""):
-    name = re.sub(u"<.*?>", u"", name)
-    name = re.sub(u"\s\s+", u"", name)
-    name = re.sub(u"\ufeff", u"", name)
+def sanitizeName(name, default=""):
+    name = re.sub("<.*?>", "", name)
+    name = re.sub("\s\s+", "", name)
+    name = re.sub("\ufeff", "", name)
     name = name.strip()
     if not name:
         return default
@@ -60,7 +61,7 @@ class Direction(object):
         return not self.__eq__(other)
 
     def __unicode__(self):
-        return u"{} -> {}".format(self.front, self.back)
+        return "{} -> {}".format(self.front, self.back)
 
 class Schedule(object):
     def __init__(self):
@@ -82,7 +83,7 @@ class Schedule(object):
         return self.thingDirection.get(thing.id, {})
     
     def getDirections(self):
-        return self.directionThing.keys()
+        return list(self.directionThing.keys())
 
 class ScheduleInfo(object):
     def __init__(self):
@@ -116,10 +117,10 @@ class MemCollection(object):
         return self.thingDirection.get(thing.id, {})
     
     def getDirections(self):
-        return self.directionThing.keys()
+        return list(self.directionThing.keys())
     
     def countDirections(self):
-        return len(self.directionThing.keys())
+        return len(list(self.directionThing.keys()))
 
 class Mem(object):
     def __init__(self, memId=None):
@@ -159,7 +160,7 @@ class NameUniquifier(object):
             return key
 
         self.names[key] += 1
-        return u"{} {}".format(key, self.names[key])
+        return "{} {}".format(key, self.names[key])
 
 class Field(object):
     Text = 'text'
@@ -218,7 +219,7 @@ class Pool(object):
         if not colType in Column.Types:
             return
         
-        column = Column(colType, self.uniquifyName(sanitizeName(name, u"Column")), int(index))
+        column = Column(colType, self.uniquifyName(sanitizeName(name, "Column")), int(index))
         self.columns[column.name] = column
         self.columnsByType[column.type][column.name] = column
         self.columnsByIndex[column.index] = column
@@ -227,7 +228,7 @@ class Pool(object):
         if not attrType in Attribute.Types:
             return
         
-        attribute = Attribute(attrType, self.uniquifyName(sanitizeName(name, u"Attribute")), int(index))
+        attribute = Attribute(attrType, self.uniquifyName(sanitizeName(name, "Attribute")), int(index))
         self.attributes[attribute.name] = attribute
     
     def getColumn(self, name):
@@ -237,34 +238,34 @@ class Pool(object):
         return self.columns.get(name)
     
     def getColumnNames(self):
-        return self.columns.keys()
+        return list(self.columns.keys())
 
     def getTextColumnNames(self):
-        return self.columnsByType[Field.Text].keys()
+        return list(self.columnsByType[Field.Text].keys())
 
     def getImageColumnNames(self):
-        return self.columnsByType[Field.Image].keys()
+        return list(self.columnsByType[Field.Image].keys())
     
     def getAudioColumnNames(self):
-        return self.columnsByType[Field.Audio].keys()
+        return list(self.columnsByType[Field.Audio].keys())
     
     def getAttributeNames(self):
-        return self.attributes.keys()
+        return list(self.attributes.keys())
     
     def getColumns(self):
-        return self.columns.values()
+        return list(self.columns.values())
     
     def getTextColumns(self):
-        return self.columnsByType[Field.Text].values()
+        return list(self.columnsByType[Field.Text].values())
 
     def getImageColumns(self):
-        return self.columnsByType[Field.Image].values()
+        return list(self.columnsByType[Field.Image].values())
     
     def getAudioColumns(self):
-        return self.columnsByType[Field.Audio].values()
+        return list(self.columnsByType[Field.Audio].values())
     
     def getAttributes(self):
-        return self.attributes.values()
+        return list(self.attributes.values())
 
     @staticmethod
     def __getKeyFromIndex(keys, index):
@@ -346,20 +347,20 @@ class MediaColumnData(object):
         self.files = files
     
     def getRemoteUrls(self):
-        return map(lambda f: f.remoteUrl, self.files)
+        return [f.remoteUrl for f in self.files]
     
     def getLocalUrls(self):
-        return map(lambda f: f.localUrl, self.files)
+        return [f.localUrl for f in self.files]
     
     def setRemoteUrls(self, urls):
-        self.files = map(DownloadableFile, urls)
+        self.files = list(map(DownloadableFile, urls))
 
     def setLocalUrls(self, urls):
         for url, f in zip(urls, self.files):
             f.localUrl = url
 
     def allDownloaded(self):
-        return all(map(lambda f: f.isDownloaded(), self.files))
+        return all([f.isDownloaded() for f in self.files])
 
 class AttributeData(object):
     def __init__(self):
@@ -469,7 +470,7 @@ class ThingLoader(object):
         thing.pool = self.pool
         
         for column in self.pool.getTextColumns():
-            cell = row['columns'].get(unicode(column.index), {})
+            cell = row['columns'].get(str(column.index), {})
             data = TextColumnData()
             data.values = self.__getDefinitions(cell)
             data.alternatives = self.__getAlternatives(cell)
@@ -478,19 +479,19 @@ class ThingLoader(object):
             thing.setTextColumnData(column.name, data)
         
         for column in self.pool.getAudioColumns():
-            cell = row['columns'].get(unicode(column.index), {})
+            cell = row['columns'].get(str(column.index), {})
             data = MediaColumnData()
-            data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
+            data.setRemoteUrls(list(map(fixUrl, self.__getUrls(cell))))
             thing.setAudioColumnData(column.name, data)
             
         for column in self.pool.getImageColumns():
-            cell = row['columns'].get(unicode(column.index), {})
+            cell = row['columns'].get(str(column.index), {})
             data = MediaColumnData()
-            data.setRemoteUrls(map(fixUrl, self.__getUrls(cell)))
+            data.setRemoteUrls(list(map(fixUrl, self.__getUrls(cell))))
             thing.setImageColumnData(column.name, data)
 
         for attribute in self.pool.getAttributes():
-            cell = row['attributes'].get(unicode(attribute.index), {})
+            cell = row['attributes'].get(str(attribute.index), {})
             data = AttributeData()
             data.values = self.__getAttributes(cell)
             thing.setAttributeData(attribute.name, data)
@@ -499,14 +500,14 @@ class ThingLoader(object):
 
     @staticmethod
     def __getDefinitions(cell):
-        return map(unicode.strip, cell.get("val", u"").split(","))
+        return list(map(str.strip, cell.get("val", "").split(",")))
     
     @staticmethod
     def __getAlternatives(cell):
         data = []
         for alt in cell.get("alts", []):
-            value = alt.get('val', u"")
-            if value and not value.startswith(u"_"):
+            value = alt.get('val', "")
+            if value and not value.startswith("_"):
                 data.append(value)
         return data
     
@@ -514,15 +515,15 @@ class ThingLoader(object):
     def __getHiddenAlternatives(cell):
         data = []
         for alt in cell.get("alts", []):
-            value = alt.get('val', u"")
-            if value and value.startswith(u"_"):
-                data.append(value.lstrip(u"_"))
+            value = alt.get('val', "")
+            if value and value.startswith("_"):
+                data.append(value.lstrip("_"))
         return data
     
     @staticmethod
     def __getTypingCorrects(cell):
         data = []
-        for _, typing_corrects in cell.get("typing_corrects", {}).items():
+        for _, typing_corrects in list(cell.get("typing_corrects", {}).items()):
             for value in typing_corrects:
                 if value:
                     data.append(value)
@@ -531,15 +532,15 @@ class ThingLoader(object):
     @staticmethod
     def __getUrls(cell):
         data = []
-        for value in cell.get("val", u""):
-            url = value.get("url", u"")
+        for value in cell.get("val", ""):
+            url = value.get("url", "")
             if url:
                 data.append(url)
         return data
 
     @staticmethod
     def __getAttributes(cell):
-        return map(unicode.strip, cell.get("val", u"").split(","))
+        return list(map(str.strip, cell.get("val", "").split(",")))
 
 class CourseLoader(object):
     def __init__(self, service):
@@ -563,7 +564,7 @@ class CourseLoader(object):
         
         courseData = self.service.loadCourseData(course.id)
 
-        course.title = sanitizeName(courseData["session"]["course"]["name"], u"Course")
+        course.title = sanitizeName(courseData["session"]["course"]["name"], "Course")
         course.description = courseData["session"]["course"]["description"]
         course.source = courseData["session"]["course"]["source"]["name"]
         course.target = courseData["session"]["course"]["target"]["name"]
@@ -586,7 +587,7 @@ class CourseLoader(object):
     
     def loadPool(self, data):
         pool = Pool(data["id"])
-        pool.name = self.uniquifyPoolName(sanitizeName(data["name"], u"Pool"))
+        pool.name = self.uniquifyPoolName(sanitizeName(data["name"], "Pool"))
         
         for index, column in sorted(data["columns"].items()):
             pool.addColumn(column['kind'], column['label'], index)
@@ -627,8 +628,8 @@ class CourseLoader(object):
         if memData['image_output_url']:
             text = "img:{}".format(memData['image_output_url'])
         mem.text, remoteImageUrls = markdown.convertAndReturnImages(text)
-        mem.images.extend(map(DownloadableFile, map(fixUrl, remoteImageUrls)))
-        for before, after in zip(remoteImageUrls, map(lambda im: im.remoteUrl, mem.images)):
+        mem.images.extend(list(map(DownloadableFile, list(map(fixUrl, remoteImageUrls)))))
+        for before, after in zip(remoteImageUrls, [im.remoteUrl for im in mem.images]):
             if after != before:
                 mem.text = mem.text.replace(before, after)
         return mem
@@ -668,11 +669,11 @@ class CourseLoader(object):
             thingId = learnable['thing_id']
             if level.pool.hasThing(thingId):
                 thing = level.pool.getThing(thingId)
-	    else:
+            else:
                 thingData = self.service.loadThingData(thingId)
                 thing = thingLoader.loadThing(thingData, self.service.toAbsoluteMediaUrl)
                 level.pool.addThing(thing)
-            level.things.append(thing)
+                level.things.append(thing)
 
             if thing.id in thingusers:
                 userData = thingusers[thing.id]
@@ -693,10 +694,10 @@ class CourseLoader(object):
         
         return level
 
-class IncompleteReadHttpAndHttpsHandler(urllib2.HTTPHandler, urllib2.HTTPSHandler):
+class IncompleteReadHttpAndHttpsHandler(urllib.request.HTTPHandler, urllib.request.HTTPSHandler):
     def __init__(self, debuglevel=0):
-        urllib2.HTTPHandler.__init__(self, debuglevel)
-        urllib2.HTTPSHandler.__init__(self, debuglevel)
+        urllib.request.HTTPHandler.__init__(self, debuglevel)
+        urllib.request.HTTPSHandler.__init__(self, debuglevel)
     
     @staticmethod
     def makeHttp10(http_class, *args, **kwargs):
@@ -712,7 +713,7 @@ class IncompleteReadHttpAndHttpsHandler(urllib2.HTTPHandler, urllib2.HTTPSHandle
         else:
             try:
                 return response.read_savedoriginal(n)
-            except httplib.IncompleteRead:
+            except http.client.IncompleteRead:
                 response.response10 = reopen10()
                 return response.response10.read(n)
     
@@ -724,10 +725,10 @@ class IncompleteReadHttpAndHttpsHandler(urllib2.HTTPHandler, urllib2.HTTPSHandle
         return response
     
     def http_open(self, req):
-        return self.do_open_wrapped(httplib.HTTPConnection, req)
+        return self.do_open_wrapped(http.client.HTTPConnection, req)
     
     def https_open(self, req):
-        return self.do_open_wrapped(httplib.HTTPSConnection, req)
+        return self.do_open_wrapped(http.client.HTTPSConnection, req)
 
 class MemriseError(RuntimeError):
     pass
@@ -742,14 +743,14 @@ class Service(object):
     def __init__(self, downloadDirectory=None, cookiejar=None):
         self.downloadDirectory = downloadDirectory
         if cookiejar is None:
-            cookiejar = cookielib.CookieJar()
-        self.opener = urllib2.build_opener(IncompleteReadHttpAndHttpsHandler, urllib2.HTTPCookieProcessor(cookiejar))
+            cookiejar = http.cookiejar.cookielib.CookieJar()
+        self.opener = urllib.request.build_opener(IncompleteReadHttpAndHttpsHandler, urllib.request.HTTPCookieProcessor(cookiejar))
         self.opener.addheaders = [('User-Agent', 'Mozilla/5.0')]
     
     def openWithRetry(self, url, tryCount=3):
         try:
             return self.opener.open(url)
-        except httplib.BadStatusLine:
+        except http.client.BadStatusLine:
             # not clear why this error occurs (seemingly randomly),
             # so I regret that all we can do is wait and retry.
             if tryCount > 0:
@@ -759,25 +760,25 @@ class Service(object):
                 raise
     
     def isLoggedIn(self):
-        request = urllib2.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
+        request = urllib.request.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
         response = self.openWithRetry(request)
         return bool(re.match('https?://www.memrise.com/home/', response.geturl()))
         
     def login(self, username, password):
-        request1 = urllib2.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
+        request1 = urllib.request.Request('https://www.memrise.com/login/', None, {'Referer': 'https://www.memrise.com/'})
         response1 = self.openWithRetry(request1)
-        soup = BeautifulSoup.BeautifulSoup(response1.read())
+        soup = BeautifulSoup(response1.read())
         form = soup.find("form", attrs={"action": '/login/'})
         fields = {}
         for field in form.findAll("input"):
-            if field.has_key('name'):
-                if field.has_key('value'):
+            if 'name' in field:
+                if 'value' in field:
                     fields[field['name']] = field['value']
                 else:
                     fields[field['name']] = ""
         fields['username'] = username
         fields['password'] = password
-        request2 = urllib2.Request(response1.geturl(), urllib.urlencode(fields), {'Referer': response1.geturl()})
+        request2 = urllib.request.Request(response1.geturl(), urllib.parse.urlencode(fields), {'Referer': response1.geturl()})
         response2 = self.openWithRetry(request2)
         return bool(re.match('https?://www.memrise.com/home/', response2.geturl()))
     
@@ -790,11 +791,11 @@ class Service(object):
     def loadCourseData(self, courseId):
         courseUrl = self.getHtmlCourseUrl(courseId)
         response = self.openWithRetry(courseUrl)
-        soup = BeautifulSoup.BeautifulSoup(response.read())
+        soup = BeautifulSoup(response.read())
 
         levelCount = 0
         if soup.findAll('div', {'class': lambda x: x and 'levels' in x.split()}):
-	    levelNums = [int(tag.string) for tag in soup.findAll('div', {'class': 'level-index'})]
+            levelNums = [int(tag.string) for tag in soup.findAll('div', {'class': 'level-index'})]
             if len(levelNums) > 0:
                 levelCount = max(levelNums)
         elif soup.findAll('div', {'class': lambda x: x and 'things' in x.split()}):
@@ -806,15 +807,15 @@ class Service(object):
         for levelIndex in range(1,levelCount+1):
             try:
                 return self.loadLevelData(courseId, levelIndex)
-	    except LevelNotFoundError:
-		pass
+            except LevelNotFoundError:
+                pass
 
     def loadLevelData(self, courseId, levelIndex):
         try:
             levelUrl = self.getJsonLevelUrl(courseId, levelIndex)
             response = self.openWithRetry(levelUrl)
             return json.load(response)
-        except urllib2.HTTPError as e:
+        except urllib.HTTPError as e:
             if e.code == 404 or e.code == 400:
                 raise LevelNotFoundError("Level not found: {}".format(levelIndex))
             else:
@@ -838,7 +839,7 @@ class Service(object):
             response = self.openWithRetry(memUrl)
             result = json.load(response)
             return result.get("mem", result)
-        except urllib2.HTTPError as e:
+        except urllib.HTTPError as e:
             if e.code == 404 or e.code == 400:
                 memsUrl = self.getJsonManyMemUrl(thingId, learnableId)
                 response = self.openWithRetry(memsUrl)
@@ -864,27 +865,27 @@ class Service(object):
 
     @staticmethod
     def getHtmlCourseUrl(courseId):
-        return u'https://www.memrise.com/course/{:d}/'.format(courseId)
+        return 'https://www.memrise.com/course/{:d}/'.format(courseId)
     
     @staticmethod
     def getJsonLevelUrl(courseId, levelIndex):
-        return u"https://www.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
+        return "https://www.memrise.com/ajax/session/?course_id={:d}&level_index={:d}&session_slug=preview".format(courseId, levelIndex)
     
     @staticmethod
     def getJsonPoolUrl(poolId):
-        return u"https://www.memrise.com/api/pool/get/?pool_id={:d}".format(poolId)
+        return "https://www.memrise.com/api/pool/get/?pool_id={:d}".format(poolId)
 
     @staticmethod
     def getJsonThingUrl(thingId):
-        return u"https://www.memrise.com/api/thing/get/?thing_id={:d}".format(thingId)
+        return "https://www.memrise.com/api/thing/get/?thing_id={:d}".format(thingId)
 
     @staticmethod
     def getJsonMemUrl(memId, thingId, colA, colB):
-        return u"https://www.memrise.com/api/mem/get/?mem_id={:d}&thing_id={:d}&column_a={:d}&column_b={:d}".format(memId, thingId, colA, colB)
+        return "https://www.memrise.com/api/mem/get/?mem_id={:d}&thing_id={:d}&column_a={:d}&column_b={:d}".format(memId, thingId, colA, colB)
 
     @staticmethod
     def getJsonManyMemUrl(thingId, learnableId):
-        return u"https://www.memrise.com/api/mem/get_many_for_thing/?thing_id={:d}&learnable_id={:d}".format(thingId, learnableId)
+        return "https://www.memrise.com/api/mem/get_many_for_thing/?thing_id={:d}&learnable_id={:d}".format(thingId, learnableId)
 
     @staticmethod
     def toAbsoluteMediaUrl(url):
@@ -892,7 +893,7 @@ class Service(object):
             return url
         # fix wrong urls: /static/xyz should map to https://static.memrise.com/xyz
         url = re.sub("^\/static\/", "/", url)
-        return urlparse.urljoin(u"http://static.memrise.com/", url)
+        return urllib.parse.urljoin("http://static.memrise.com/", url)
     
     def downloadMedia(self, url, skipExisting=False):
         if not self.downloadDirectory:
@@ -900,7 +901,7 @@ class Service(object):
         
         # Replace links to images and audio on the Memrise servers
         # by downloading the content to the user's media dir
-        memrisePath = urlparse.urlparse(url).path
+        memrisePath = urllib.parse.urlparse(url).path
         contentExtension = os.path.splitext(memrisePath)[1]
         localName = "{:s}{:s}".format(uuid.uuid5(uuid.NAMESPACE_URL, url.encode('utf-8')), contentExtension)
         fullMediaPath = os.path.join(self.downloadDirectory, localName)
